@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import EmptyState from './components/EmptyState.tsx'
 import ErrorState from './components/ErrorState.tsx'
 import Forecast from './components/Forecast.tsx'
@@ -58,6 +58,12 @@ function App() {
   const [query, setQuery] = useState('')
   const { state, search } = useWeather()
   const inputRef = useRef<HTMLInputElement>(null)
+
+  // Name the browser tab after the city being shown.
+  const cityName = state.status === 'success' ? state.location.name : null
+  useEffect(() => {
+    document.title = cityName ? `${cityName} weather - Clima` : 'Clima'
+  }, [cityName])
 
   /** Searches from outside the form (example cities, retry) and keeps focus in the search box. */
   function searchFor(city: string) {
@@ -126,7 +132,7 @@ function App() {
           rel="noreferrer"
           className="rounded-sm font-medium text-ink underline decoration-line underline-offset-4 transition-colors hover:decoration-ink"
         >
-          Open-Meteo
+          Open-Meteo <span className="sr-only">(opens in a new tab)</span>
         </a>
       </footer>
     </div>

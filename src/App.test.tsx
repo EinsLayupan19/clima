@@ -92,8 +92,14 @@ describe('App layout', () => {
   it('credits Open-Meteo as the weather data source', () => {
     render(<App />)
 
-    const link = screen.getByRole('link', { name: 'Open-Meteo' })
+    const link = screen.getByRole('link', { name: 'Open-Meteo (opens in a new tab)' })
     expect(link.getAttribute('href')).toBe('https://open-meteo.com')
+  })
+
+  it('starts with the app name as the page title', () => {
+    render(<App />)
+
+    expect(document.title).toBe('Clima')
   })
 })
 
@@ -296,6 +302,30 @@ describe('Current weather', () => {
     expect(screen.getByRole('status').textContent).toBe(
       'Showing weather for Manila, National Capital Region, Philippines: 34°C, mainly clear.',
     )
+  })
+
+  it('names the page after the city, and resets when a search finds nothing', async () => {
+    stubOpenMeteo({
+      geocoding: async (url) =>
+        jsonResponse(
+          url.searchParams.get('name') === 'Manila'
+            ? { results: [geocodingResult('Manila', 'National Capital Region', 'Philippines')] }
+            : {},
+        ),
+      forecast: async () => jsonResponse(forecastResult()),
+    })
+    const user = userEvent.setup()
+    render(<App />)
+    const input = screen.getByLabelText('City')
+
+    await user.type(input, 'Manila{Enter}')
+    await screen.findByRole('heading', { level: 1, name: 'Manila' })
+    expect(document.title).toBe('Manila weather - Clima')
+
+    await user.clear(input)
+    await user.type(input, 'Zzqxqx{Enter}')
+    await screen.findByRole('heading', { level: 1, name: 'No results for “Zzqxqx”' })
+    expect(document.title).toBe('Clima')
   })
 
   it('leaves out details the API did not provide', async () => {

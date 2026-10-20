@@ -6,8 +6,12 @@
   Colors are defined once here and swapped for dark mode, so components only
   use semantic names (bg-canvas, text-ink, text-ink-muted, border-line, ...).
 
-  Corner radius rule: interactive controls use rounded-xl (12px),
-  larger surfaces use rounded-2xl (16px). Nothing else.
+  Corner radius rule: everything rounded uses rounded-xl (12px), from buttons
+  and inputs to loading placeholders. The only exception is the small focus
+  outline on inline links (rounded-sm).
+
+  --line is for decorative dividers. --line-strong is for borders that mark
+  where a control is (WCAG 1.4.11 asks for 3:1 against the page).
 */
 :root {
   color-scheme: light;
@@ -17,6 +21,7 @@
   --ink: oklch(0.22 0.012 255);
   --ink-muted: oklch(0.48 0.014 255);
   --line: oklch(0.9 0.006 250);
+  --line-strong: oklch(0.64 0.012 255);
   --accent: oklch(0.5 0.13 245);
   --accent-ink: oklch(0.985 0.002 250);
   --danger: oklch(0.52 0.18 27);
@@ -31,6 +36,7 @@
     --ink: oklch(0.96 0.004 250);
     --ink-muted: oklch(0.72 0.014 255);
     --line: oklch(0.3 0.012 255);
+    --line-strong: oklch(0.52 0.012 255);
     --accent: oklch(0.74 0.11 240);
     --accent-ink: oklch(0.17 0.008 255);
     --danger: oklch(0.74 0.14 25);
@@ -45,6 +51,7 @@
   --color-ink: var(--ink);
   --color-ink-muted: var(--ink-muted);
   --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
   --color-accent: var(--accent);
   --color-accent-ink: var(--accent-ink);
   --color-danger: var(--danger);

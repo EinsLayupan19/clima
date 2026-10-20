@@ -54,12 +54,12 @@ function SearchBar({ value, onChange, onSearch, inputRef }: SearchBarProps) {
             autoComplete="off"
             spellCheck={false}
             maxLength={100}
-            placeholder="e.g. Lisbon or Paris, Texas"
+            placeholder="e.g. Paris, Texas"
             value={value}
             onChange={(event) => handleChange(event.target.value)}
             aria-invalid={isBlank}
             aria-describedby={isBlank ? errorId : undefined}
-            className="h-12 w-full rounded-xl border border-line bg-surface pr-4 pl-11 text-base text-ink transition-colors placeholder:text-ink-muted hover:border-ink-muted aria-invalid:border-danger"
+            className="h-12 w-full rounded-xl border border-line-strong bg-surface pr-4 pl-11 text-base text-ink transition-colors placeholder:text-ink-muted hover:border-ink-muted aria-invalid:border-danger"
           />
         </div>
 
