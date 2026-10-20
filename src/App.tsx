@@ -1,11 +1,15 @@
 import { useRef, useState } from 'react'
 import EmptyState from './components/EmptyState.tsx'
 import ErrorState from './components/ErrorState.tsx'
+import CurrentWeather from './components/CurrentWeather.tsx'
 import LoadingState from './components/LoadingState.tsx'
-import LocationHeader from './components/LocationHeader.tsx'
 import SearchBar from './components/SearchBar.tsx'
 import { useWeather } from './hooks/useWeather.ts'
-import { formatLocationSubtitle } from './lib/weatherUtils.ts'
+import {
+  formatLocationSubtitle,
+  formatTemperature,
+  getWeatherCondition,
+} from './lib/weatherUtils.ts'
 import type { ApiErrorKind, WeatherState } from './types/weather.ts'
 
 const ERROR_COPY: Record<ApiErrorKind, { title: string; message: string }> = {
@@ -39,8 +43,11 @@ function getStatusMessage(state: WeatherState): string {
     case 'error':
       return ERROR_COPY[state.kind].title
     case 'success': {
-      const subtitle = formatLocationSubtitle(state.location)
-      return `Showing ${state.location.name}${subtitle ? `, ${subtitle}` : ''}.`
+      const { location, weather } = state
+      const subtitle = formatLocationSubtitle(location)
+      const place = subtitle ? `${location.name}, ${subtitle}` : location.name
+      const condition = getWeatherCondition(weather.weatherCode, weather.isDay).label
+      return `Showing weather for ${place}: ${formatTemperature(weather.temperature)}C, ${condition.toLowerCase()}.`
     }
   }
 }
@@ -79,7 +86,7 @@ function App() {
           />
         )
       case 'success':
-        return <LocationHeader location={state.location} />
+        return <CurrentWeather location={state.location} weather={state.weather} />
     }
   }
 

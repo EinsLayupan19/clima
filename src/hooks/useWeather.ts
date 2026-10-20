@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ApiError, searchLocation } from '../lib/weatherApi.ts'
+import { ApiError, getCurrentWeather, searchLocation } from '../lib/weatherApi.ts'
 import type { WeatherState } from '../types/weather.ts'
 
 /**
@@ -19,18 +19,24 @@ export function useWeather() {
     controllerRef.current = controller
     setState({ status: 'loading', query })
 
-    searchLocation(query, controller.signal).then(
-      (location) => {
-        if (controller.signal.aborted) return
-        setState(location ? { status: 'success', location } : { status: 'not-found', query })
-      },
-      (error: unknown) => {
-        if (controller.signal.aborted) return
-        const kind = error instanceof ApiError ? error.kind : 'invalid-response'
-        setState({ status: 'error', query, kind })
-      },
-    )
+    void loadWeather(query, controller.signal).then((nextState) => {
+      if (!controller.signal.aborted) setState(nextState)
+    })
   }, [])
 
   return { state, search }
+}
+
+/** City search, then current weather for the best match. Never throws. */
+async function loadWeather(query: string, signal: AbortSignal): Promise<WeatherState> {
+  try {
+    const location = await searchLocation(query, signal)
+    if (!location) return { status: 'not-found', query }
+
+    const weather = await getCurrentWeather(location, signal)
+    return { status: 'success', location, weather }
+  } catch (error) {
+    const kind = error instanceof ApiError ? error.kind : 'invalid-response'
+    return { status: 'error', query, kind }
+  }
 }

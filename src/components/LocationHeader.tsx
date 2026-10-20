@@ -9,15 +9,15 @@ function LocationHeader({ location }: LocationHeaderProps) {
   const subtitle = formatLocationSubtitle(location)
 
   return (
-    <section aria-labelledby="location-title">
+    <div>
       <h1
         id="location-title"
-        className="text-5xl font-semibold tracking-tighter text-balance wrap-break-word sm:text-6xl"
+        className="text-3xl font-semibold tracking-tight text-balance wrap-break-word sm:text-4xl"
       >
         {location.name}
       </h1>
-      {subtitle && <p className="mt-3 text-lg text-ink-muted">{subtitle}</p>}
-    </section>
+      {subtitle && <p className="mt-1 text-base text-ink-muted sm:text-lg">{subtitle}</p>}
+    </div>
   )
 }
 

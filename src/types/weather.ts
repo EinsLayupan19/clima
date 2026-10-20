@@ -9,6 +9,39 @@ export interface Location {
   longitude: number
 }
 
+/**
+ * Current conditions at a location, in metric units (°C, km/h, %).
+ * Optional readings are null when the API does not provide them.
+ */
+export interface CurrentWeather {
+  temperature: number
+  feelsLike: number | null
+  humidity: number | null
+  windSpeed: number | null
+  /** Chance of precipitation for the current hour. */
+  precipitationChance: number | null
+  /** WMO weather interpretation code. */
+  weatherCode: number
+  isDay: boolean
+}
+
+export type WeatherIconName =
+  | 'clear-day'
+  | 'clear-night'
+  | 'partly-cloudy-day'
+  | 'partly-cloudy-night'
+  | 'cloudy'
+  | 'fog'
+  | 'rain'
+  | 'snow'
+  | 'thunderstorm'
+  | 'unknown'
+
+export interface WeatherCondition {
+  label: string
+  icon: WeatherIconName
+}
+
 export type ApiErrorKind = 'network' | 'timeout' | 'server' | 'invalid-response'
 
 export type WeatherState =
@@ -16,4 +49,4 @@ export type WeatherState =
   | { status: 'loading'; query: string }
   | { status: 'not-found'; query: string }
   | { status: 'error'; query: string; kind: ApiErrorKind }
-  | { status: 'success'; location: Location }
+  | { status: 'success'; location: Location; weather: CurrentWeather }

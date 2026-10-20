@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { formatLocationSubtitle, normalizeQuery } from './weatherUtils.ts'
+import {
+  formatLocationSubtitle,
+  formatPercent,
+  formatTemperature,
+  formatWindSpeed,
+  getWeatherCondition,
+  normalizeQuery,
+} from './weatherUtils.ts'
 
 describe('normalizeQuery', () => {
   it('trims the ends and collapses repeated spaces', () => {
@@ -46,5 +53,60 @@ describe('formatLocationSubtitle', () => {
     const location = { id: 3, name: 'Nowhere', latitude: 0, longitude: 0 }
 
     expect(formatLocationSubtitle(location)).toBe('')
+  })
+})
+
+describe('getWeatherCondition', () => {
+  it.each([
+    [0, true, 'Clear sky', 'clear-day'],
+    [0, false, 'Clear sky', 'clear-night'],
+    [1, true, 'Mainly clear', 'partly-cloudy-day'],
+    [2, false, 'Partly cloudy', 'partly-cloudy-night'],
+    [3, true, 'Overcast', 'cloudy'],
+    [45, true, 'Fog', 'fog'],
+    [48, true, 'Freezing fog', 'fog'],
+    [53, true, 'Drizzle', 'rain'],
+    [57, true, 'Freezing drizzle', 'rain'],
+    [61, true, 'Light rain', 'rain'],
+    [65, true, 'Heavy rain', 'rain'],
+    [67, true, 'Freezing rain', 'rain'],
+    [73, true, 'Snow', 'snow'],
+    [77, true, 'Snow grains', 'snow'],
+    [81, true, 'Rain showers', 'rain'],
+    [86, true, 'Heavy snow showers', 'snow'],
+    [95, true, 'Thunderstorm', 'thunderstorm'],
+    [99, false, 'Thunderstorm with heavy hail', 'thunderstorm'],
+  ] as const)('maps code %i (day: %s) to “%s”', (code, isDay, label, icon) => {
+    expect(getWeatherCondition(code, isDay)).toEqual({ label, icon })
+  })
+
+  it('falls back to a neutral label for codes it does not know', () => {
+    expect(getWeatherCondition(42, true)).toEqual({ label: 'Unknown conditions', icon: 'unknown' })
+  })
+})
+
+describe('formatTemperature', () => {
+  it('rounds to a whole degree', () => {
+    expect(formatTemperature(34.4)).toBe('34°')
+  })
+
+  it('rounds negative temperatures', () => {
+    expect(formatTemperature(-7.6)).toBe('-8°')
+  })
+
+  it('never shows a negative zero', () => {
+    expect(formatTemperature(-0.4)).toBe('0°')
+  })
+})
+
+describe('formatWindSpeed', () => {
+  it('rounds to a whole number in km/h', () => {
+    expect(formatWindSpeed(3.1)).toBe('3 km/h')
+  })
+})
+
+describe('formatPercent', () => {
+  it('rounds to a whole percentage', () => {
+    expect(formatPercent(48.6)).toBe('49%')
   })
 })
