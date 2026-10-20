@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  formatDayLabel,
   formatLocationSubtitle,
+  formatShortDate,
   formatPercent,
   formatTemperature,
   formatWindSpeed,
@@ -102,6 +104,31 @@ describe('formatTemperature', () => {
 describe('formatWindSpeed', () => {
   it('rounds to a whole number in km/h', () => {
     expect(formatWindSpeed(3.1)).toBe('3 km/h')
+  })
+})
+
+describe('formatDayLabel', () => {
+  it('says Today for the current day', () => {
+    expect(formatDayLabel('2026-10-20', true)).toBe('Today')
+  })
+
+  it('uses the short weekday name for other days', () => {
+    expect(formatDayLabel('2026-10-21', false)).toBe('Wed')
+  })
+
+  it('reads the date as a calendar day, not shifted by time zone', () => {
+    // 1 January 2026 is a Thursday everywhere; a UTC shift would make it Wednesday.
+    expect(formatDayLabel('2026-01-01', false)).toBe('Thu')
+  })
+})
+
+describe('formatShortDate', () => {
+  it('shows the month and day', () => {
+    expect(formatShortDate('2026-10-21')).toBe('Oct 21')
+  })
+
+  it('keeps the first of the month on the right day', () => {
+    expect(formatShortDate('2026-01-01')).toBe('Jan 1')
   })
 })
 

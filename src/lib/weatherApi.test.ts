@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ApiError, fetchJson, getCurrentWeather, searchLocation } from './weatherApi.ts'
+import { ApiError, fetchJson, getWeather, searchLocation } from './weatherApi.ts'
 
 function jsonResponse(body: unknown, status = 200) {
   return {
@@ -109,17 +109,122 @@ const manilaForecast = {
     weather_code: 1,
     wind_speed_10m: 3.1,
   },
+  daily: {
+    time: [
+      '2026-10-20',
+      '2026-10-21',
+      '2026-10-22',
+      '2026-10-23',
+      '2026-10-24',
+      '2026-10-25',
+      '2026-10-26',
+    ],
+    weather_code: [51, 53, 51, 51, 51, 3, 53],
+    temperature_2m_max: [34.5, 32.9, 33.5, 32.6, 32.3, 33.1, 33.0],
+    temperature_2m_min: [27.3, 27.2, 27.5, 28.2, 26.9, 25.9, 25.6],
+  },
 }
 
-describe('getCurrentWeather', () => {
+describe('getWeather: daily forecast', () => {
+  const manila = { latitude: 14.6042, longitude: 120.9822 }
+
+  it('returns each forecast day with its date, condition code, high and low', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(manilaForecast)))
+
+    const { forecast } = await getWeather(manila)
+
+    expect(forecast).toHaveLength(7)
+    expect(forecast[0]).toEqual({
+      date: '2026-10-20',
+      isToday: true,
+      weatherCode: 51,
+      high: 34.5,
+      low: 27.3,
+    })
+    expect(forecast[6]).toEqual({
+      date: '2026-10-26',
+      isToday: false,
+      weatherCode: 53,
+      high: 33.0,
+      low: 25.6,
+    })
+  })
+
+  it('asks for 7 days of daily data in the location’s own time zone', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(manilaForecast))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await getWeather(manila)
+
+    const url = new URL(fetchMock.mock.calls[0][0])
+    expect(url.searchParams.get('daily')?.split(',')).toEqual(
+      expect.arrayContaining(['weather_code', 'temperature_2m_max', 'temperature_2m_min']),
+    )
+    expect(url.searchParams.get('forecast_days')).toBe('7')
+    expect(url.searchParams.get('timezone')).toBe('auto')
+  })
+
+  it('skips days with missing or invalid values and keeps the rest', async () => {
+    const daily = {
+      ...manilaForecast.daily,
+      time: ['2026-10-20', 'not-a-date', ...manilaForecast.daily.time.slice(2)],
+      temperature_2m_max: [34.5, 32.9, null, ...manilaForecast.daily.temperature_2m_max.slice(3)],
+      weather_code: [51, 53, 51, 'rain', ...manilaForecast.daily.weather_code.slice(4)],
+    }
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ ...manilaForecast, daily })))
+
+    const { forecast } = await getWeather(manila)
+
+    expect(forecast.map((day) => day.date)).toEqual([
+      '2026-10-20',
+      '2026-10-24',
+      '2026-10-25',
+      '2026-10-26',
+    ])
+  })
+
+  it('only marks the location’s first forecast date as today', async () => {
+    const daily = {
+      ...manilaForecast.daily,
+      temperature_2m_min: [null, ...manilaForecast.daily.temperature_2m_min.slice(1)],
+    }
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ ...manilaForecast, daily })))
+
+    const { forecast } = await getWeather(manila)
+
+    expect(forecast[0].date).toBe('2026-10-21')
+    expect(forecast.some((day) => day.isToday)).toBe(false)
+  })
+
+  it('returns an empty forecast but keeps current conditions when daily data is missing', async () => {
+    const { daily: _daily, ...withoutDaily } = manilaForecast
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(withoutDaily)))
+
+    const weather = await getWeather(manila)
+
+    expect(weather.forecast).toEqual([])
+    expect(weather.current.temperature).toBe(34.4)
+  })
+
+  it('returns an empty forecast when the daily data is not in list form', async () => {
+    const daily = { ...manilaForecast.daily, time: '2026-10-20' }
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ ...manilaForecast, daily })))
+
+    const { forecast } = await getWeather(manila)
+
+    expect(forecast).toEqual([])
+  })
+})
+
+describe('getWeather: current conditions', () => {
   const manila = { latitude: 14.6042, longitude: 120.9822 }
 
   it('returns current conditions as app-friendly data', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(manilaForecast)))
 
-    const weather = await getCurrentWeather(manila)
+    const weather = await getWeather(manila)
 
-    expect(weather).toEqual({
+    expect(weather.current).toEqual({
       temperature: 34.4,
       feelsLike: 40.8,
       humidity: 49,
@@ -134,7 +239,7 @@ describe('getCurrentWeather', () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(manilaForecast))
     vi.stubGlobal('fetch', fetchMock)
 
-    await getCurrentWeather(manila)
+    await getWeather(manila)
 
     const url = new URL(fetchMock.mock.calls[0][0])
     expect(url.origin + url.pathname).toBe('https://api.open-meteo.com/v1/forecast')
@@ -151,9 +256,9 @@ describe('getCurrentWeather', () => {
     const night = { ...manilaForecast, current: { ...manilaForecast.current, is_day: 0 } }
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(night)))
 
-    const weather = await getCurrentWeather(manila)
+    const weather = await getWeather(manila)
 
-    expect(weather.isDay).toBe(false)
+    expect(weather.current.isDay).toBe(false)
   })
 
   it('uses null for optional values the API leaves out or sends as null', async () => {
@@ -168,9 +273,9 @@ describe('getCurrentWeather', () => {
     }
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(sparse)))
 
-    const weather = await getCurrentWeather(manila)
+    const weather = await getWeather(manila)
 
-    expect(weather).toMatchObject({
+    expect(weather.current).toMatchObject({
       feelsLike: null,
       humidity: null,
       windSpeed: null,
@@ -182,21 +287,21 @@ describe('getCurrentWeather', () => {
     const { temperature_2m: _temperature, ...current } = manilaForecast.current
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ ...manilaForecast, current })))
 
-    await expect(getCurrentWeather(manila)).rejects.toMatchObject({ kind: 'invalid-response' })
+    await expect(getWeather(manila)).rejects.toMatchObject({ kind: 'invalid-response' })
   })
 
   it('throws an invalid-response error when the weather code is missing', async () => {
     const { weather_code: _code, ...current } = manilaForecast.current
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ ...manilaForecast, current })))
 
-    await expect(getCurrentWeather(manila)).rejects.toMatchObject({ kind: 'invalid-response' })
+    await expect(getWeather(manila)).rejects.toMatchObject({ kind: 'invalid-response' })
   })
 
   it('throws an invalid-response error when there is no current block', async () => {
     const { current: _current, ...rest } = manilaForecast
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(rest)))
 
-    await expect(getCurrentWeather(manila)).rejects.toMatchObject({ kind: 'invalid-response' })
+    await expect(getWeather(manila)).rejects.toMatchObject({ kind: 'invalid-response' })
   })
 
   it('throws a server error when the API rejects the request', async () => {
@@ -205,7 +310,7 @@ describe('getCurrentWeather', () => {
       vi.fn().mockResolvedValue(jsonResponse({ error: true, reason: 'Latitude out of range' }, 400)),
     )
 
-    await expect(getCurrentWeather(manila)).rejects.toMatchObject({ kind: 'server' })
+    await expect(getWeather(manila)).rejects.toMatchObject({ kind: 'server' })
   })
 })
 

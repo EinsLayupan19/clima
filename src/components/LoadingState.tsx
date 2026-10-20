@@ -19,6 +19,17 @@ function LoadingState() {
           </div>
         ))}
       </div>
+
+      <div className="mt-12 sm:mt-16">
+        <div className="h-7 w-36 rounded-xl bg-surface" />
+        <div className="mt-3 border-t border-line pt-3 md:mt-4 md:grid md:grid-cols-7 md:gap-2 md:pt-6">
+          {[0, 1, 2, 3, 4, 5, 6].map((item) => (
+            <div key={item} className="py-3 md:py-0">
+              <div className="h-11 rounded-xl bg-surface md:h-36" />
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }

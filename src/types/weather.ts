@@ -25,6 +25,24 @@ export interface CurrentWeather {
   isDay: boolean
 }
 
+/** One day of the daily forecast, in °C. */
+export interface DailyForecast {
+  /** Calendar date at the location, "YYYY-MM-DD". */
+  date: string
+  isToday: boolean
+  /** WMO weather interpretation code for the day's most severe weather. */
+  weatherCode: number
+  high: number
+  low: number
+}
+
+/** Everything fetched for a location in one weather request. */
+export interface WeatherReport {
+  current: CurrentWeather
+  /** Valid days only; empty when the forecast could not be read. */
+  forecast: DailyForecast[]
+}
+
 export type WeatherIconName =
   | 'clear-day'
   | 'clear-night'
@@ -49,4 +67,4 @@ export type WeatherState =
   | { status: 'loading'; query: string }
   | { status: 'not-found'; query: string }
   | { status: 'error'; query: string; kind: ApiErrorKind }
-  | { status: 'success'; location: Location; weather: CurrentWeather }
+  | { status: 'success'; location: Location; weather: WeatherReport }

@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import EmptyState from './components/EmptyState.tsx'
 import ErrorState from './components/ErrorState.tsx'
+import Forecast from './components/Forecast.tsx'
 import CurrentWeather from './components/CurrentWeather.tsx'
 import LoadingState from './components/LoadingState.tsx'
 import SearchBar from './components/SearchBar.tsx'
@@ -43,7 +44,8 @@ function getStatusMessage(state: WeatherState): string {
     case 'error':
       return ERROR_COPY[state.kind].title
     case 'success': {
-      const { location, weather } = state
+      const { location } = state
+      const weather = state.weather.current
       const subtitle = formatLocationSubtitle(location)
       const place = subtitle ? `${location.name}, ${subtitle}` : location.name
       const condition = getWeatherCondition(weather.weatherCode, weather.isDay).label
@@ -86,7 +88,14 @@ function App() {
           />
         )
       case 'success':
-        return <CurrentWeather location={state.location} weather={state.weather} />
+        return (
+          <>
+            <CurrentWeather location={state.location} weather={state.weather.current} />
+            <div className="mt-12 sm:mt-16">
+              <Forecast days={state.weather.forecast} />
+            </div>
+          </>
+        )
     }
   }
 

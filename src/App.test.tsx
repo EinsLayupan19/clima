@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from './App.tsx'
@@ -16,7 +16,26 @@ function geocodingResult(name: string, admin1: string, country: string) {
   return { id: name.length, name, latitude: 10, longitude: 20, admin1, country }
 }
 
-function forecastResult(current: Record<string, number | null> = {}) {
+const sevenDays = {
+  time: [
+    '2026-10-20',
+    '2026-10-21',
+    '2026-10-22',
+    '2026-10-23',
+    '2026-10-24',
+    '2026-10-25',
+    '2026-10-26',
+  ],
+  weather_code: [51, 63, 95, 3, 0, 2, 45],
+  temperature_2m_max: [34.5, 32.9, 33.5, 32.6, 32.3, 33.1, 33.0],
+  temperature_2m_min: [27.3, 27.2, 27.5, 28.2, 26.9, 25.9, 25.6],
+}
+
+/** An Open-Meteo forecast response. Pass `daily: null` to leave the forecast out. */
+function forecastResult(
+  current: Record<string, number | null> = {},
+  daily: Record<string, unknown> | null = sevenDays,
+) {
   return {
     current: {
       temperature_2m: 34.4,
@@ -28,6 +47,7 @@ function forecastResult(current: Record<string, number | null> = {}) {
       is_day: 1,
       ...current,
     },
+    ...(daily && { daily }),
   }
 }
 
@@ -335,6 +355,83 @@ describe('Current weather', () => {
       await screen.findByRole('heading', { level: 1, name: 'Something went wrong' }),
     ).toBeTruthy()
     expect(screen.getByText(/sent back data we couldn’t read/)).toBeTruthy()
+  })
+})
+
+describe('Forecast', () => {
+  function stubManila(forecast: object) {
+    stubOpenMeteo({
+      geocoding: async () =>
+        jsonResponse({
+          results: [geocodingResult('Manila', 'National Capital Region', 'Philippines')],
+        }),
+      forecast: async () => jsonResponse(forecast),
+    })
+  }
+
+  async function searchManila() {
+    const user = userEvent.setup()
+    render(<App />)
+    await user.type(screen.getByLabelText('City'), 'Manila{Enter}')
+    await screen.findByRole('heading', { level: 1, name: 'Manila' })
+  }
+
+  it('lists seven days, starting with today', async () => {
+    stubManila(forecastResult())
+
+    await searchManila()
+
+    const days = within(screen.getByRole('region', { name: '7-day forecast' })).getAllByRole(
+      'listitem',
+    )
+    expect(days).toHaveLength(7)
+    expect(days[0].textContent).toContain('Today')
+    expect(days[0].textContent).toContain('Oct 20')
+    expect(days[1].textContent).toContain('Wed')
+    expect(days[1].textContent).toContain('Oct 21')
+  })
+
+  it('shows each day’s condition, high and low', async () => {
+    stubManila(forecastResult())
+
+    await searchManila()
+
+    const days = within(screen.getByRole('region', { name: '7-day forecast' })).getAllByRole(
+      'listitem',
+    )
+    expect(within(days[1]).getByText('Rain')).toBeTruthy()
+    expect(days[1].textContent).toContain('High 33°')
+    expect(days[1].textContent).toContain('Low 27°')
+    expect(within(days[2]).getByText('Thunderstorm')).toBeTruthy()
+    expect(within(days[6]).getByText('Fog')).toBeTruthy()
+  })
+
+  it('leaves out days with unreadable data', async () => {
+    stubManila(
+      forecastResult(
+        {},
+        { ...sevenDays, temperature_2m_max: [34.5, null, 33.5, 32.6, 32.3, 33.1, 33.0] },
+      ),
+    )
+
+    await searchManila()
+
+    const days = within(screen.getByRole('region', { name: '7-day forecast' })).getAllByRole(
+      'listitem',
+    )
+    expect(days).toHaveLength(6)
+    expect(days[1].textContent).toContain('Thu')
+  })
+
+  it('keeps the current weather and explains when the forecast is unavailable', async () => {
+    stubManila(forecastResult({}, null))
+
+    await searchManila()
+
+    expect(screen.getByTestId('current-temperature').textContent).toBe('34°C')
+    const forecast = screen.getByRole('region', { name: '7-day forecast' })
+    expect(within(forecast).getByText('The forecast isn’t available right now.')).toBeTruthy()
+    expect(within(forecast).queryAllByRole('listitem')).toHaveLength(0)
   })
 })
 

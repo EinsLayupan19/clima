@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ApiError, getCurrentWeather, searchLocation } from '../lib/weatherApi.ts'
+import { ApiError, getWeather, searchLocation } from '../lib/weatherApi.ts'
 import type { WeatherState } from '../types/weather.ts'
 
 /**
@@ -27,13 +27,13 @@ export function useWeather() {
   return { state, search }
 }
 
-/** City search, then current weather for the best match. Never throws. */
+/** City search, then current weather and forecast for the best match. Never throws. */
 async function loadWeather(query: string, signal: AbortSignal): Promise<WeatherState> {
   try {
     const location = await searchLocation(query, signal)
     if (!location) return { status: 'not-found', query }
 
-    const weather = await getCurrentWeather(location, signal)
+    const weather = await getWeather(location, signal)
     return { status: 'success', location, weather }
   } catch (error) {
     const kind = error instanceof ApiError ? error.kind : 'invalid-response'

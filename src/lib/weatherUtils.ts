@@ -67,6 +67,29 @@ export function formatTemperature(celsius: number): string {
   return `${roundTemperature(celsius)}°`
 }
 
+// Forecast dates are calendar days at the location ("2026-10-21"). Reading them
+// as midnight UTC and formatting in UTC keeps the browser's time zone out of it.
+const weekdayFormat = new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone: 'UTC' })
+const shortDateFormat = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  timeZone: 'UTC',
+})
+
+function parseIsoDate(isoDate: string): Date {
+  return new Date(`${isoDate}T00:00:00Z`)
+}
+
+/** "Today" for the current day, otherwise the short weekday, e.g. "Wed". */
+export function formatDayLabel(isoDate: string, isToday: boolean): string {
+  return isToday ? 'Today' : weekdayFormat.format(parseIsoDate(isoDate))
+}
+
+/** Month and day, e.g. "Oct 21". */
+export function formatShortDate(isoDate: string): string {
+  return shortDateFormat.format(parseIsoDate(isoDate))
+}
+
 export function formatWindSpeed(kmh: number): string {
   return `${Math.round(kmh)} km/h`
 }
