@@ -2,18 +2,39 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Clima - Weather for any city</title>
     <meta
       name="description"
       content="A minimal weather experience providing real-time conditions and forecasts through a clean, responsive interface."
     />
+    <meta name="color-scheme" content="light dark" />
     <meta name="theme-color" content="#f9fafb" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#111317" media="(prefers-color-scheme: dark)" />
-    <title>Clima</title>
+    <meta name="theme-color" content="#0d1013" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+    <!-- Link previews. Add og:url and og:image once the site has its final address. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Clima" />
+    <meta property="og:title" content="Clima - Weather for any city" />
+    <meta
+      property="og:description"
+      content="A minimal weather experience providing real-time conditions and forecasts through a clean, responsive interface."
+    />
+    <meta name="twitter:card" content="summary" />
+
+    <!-- Fetch the Latin subset of Geist alongside the CSS instead of after it. -->
+    <link
+      rel="preload"
+      href="/node_modules/@fontsource-variable/geist/files/geist-latin-wght-normal.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
   </head>
   <body>
     <div id="root"></div>
+    <noscript>Clima needs JavaScript to load weather data. Please enable it and reload the page.</noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

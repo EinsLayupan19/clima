@@ -52,7 +52,7 @@ export async function fetchJson(
   { signal, timeoutMs = REQUEST_TIMEOUT_MS }: FetchJsonOptions = {},
 ): Promise<unknown> {
   const timeout = AbortSignal.timeout(timeoutMs)
-  const combined = signal ? AbortSignal.any([signal, timeout]) : timeout
+  const combined = signal ? anySignal([signal, timeout]) : timeout
 
   let response: Response
   try {
@@ -72,6 +72,25 @@ export async function fetchJson(
   } catch {
     throw new ApiError('invalid-response', 'The response was not valid JSON.')
   }
+}
+
+/**
+ * A signal that aborts when any of the given signals does. Uses AbortSignal.any()
+ * where it exists, and links the signals by hand in browsers that lack it
+ * (Safari before 17.4).
+ */
+function anySignal(signals: AbortSignal[]): AbortSignal {
+  if (typeof AbortSignal.any === 'function') return AbortSignal.any(signals)
+
+  const controller = new AbortController()
+  for (const signal of signals) {
+    if (signal.aborted) {
+      controller.abort(signal.reason)
+      break
+    }
+    signal.addEventListener('abort', () => controller.abort(signal.reason), { once: true })
+  }
+  return controller.signal
 }
 
 /** Finds the best-matching place for a city name, or null if nothing matches. */

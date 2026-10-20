@@ -449,6 +449,48 @@ describe('fetchJson', () => {
     expect(error).not.toBeInstanceOf(ApiError)
     expect(error).toMatchObject({ name: 'AbortError' })
   })
+
+  describe('in browsers without AbortSignal.any (Safari before 17.4)', () => {
+    const originalAny = AbortSignal.any
+
+    function removeAbortSignalAny() {
+      Object.defineProperty(AbortSignal, 'any', { value: undefined, configurable: true })
+    }
+
+    afterEach(() => {
+      Object.defineProperty(AbortSignal, 'any', { value: originalAny, configurable: true })
+    })
+
+    it('still returns the response', async () => {
+      removeAbortSignalAny()
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ ok: 1 })))
+
+      expect(await fetchJson('https://example.test', { signal: new AbortController().signal })).toEqual(
+        { ok: 1 },
+      )
+    })
+
+    it('still lets the caller cancel', async () => {
+      removeAbortSignalAny()
+      vi.stubGlobal('fetch', neverRespondingFetch())
+      const controller = new AbortController()
+
+      const request = fetchJson('https://example.test', { signal: controller.signal })
+      controller.abort()
+      const error = await request.catch((e: unknown) => e)
+
+      expect(error).toMatchObject({ name: 'AbortError' })
+    })
+
+    it('still times out', async () => {
+      removeAbortSignalAny()
+      vi.stubGlobal('fetch', neverRespondingFetch())
+
+      await expect(
+        fetchJson('https://example.test', { signal: new AbortController().signal, timeoutMs: 10 }),
+      ).rejects.toMatchObject({ kind: 'timeout' })
+    })
+  })
 })
 
 /** A fetch that only settles when its signal aborts, like a hung request. */

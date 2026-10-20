@@ -117,10 +117,10 @@ describe('App layout', () => {
     expect(link.getAttribute('href')).toBe('https://open-meteo.com')
   })
 
-  it('starts with the app name as the page title', () => {
+  it('starts with a descriptive page title', () => {
     render(<App />)
 
-    expect(document.title).toBe('Clima')
+    expect(document.title).toBe('Clima - Weather for any city')
   })
 })
 
@@ -346,7 +346,7 @@ describe('Current weather', () => {
     await user.clear(input)
     await user.type(input, 'Zzqxqx{Enter}')
     await screen.findByRole('heading', { level: 1, name: 'No results for “Zzqxqx”' })
-    expect(document.title).toBe('Clima')
+    expect(document.title).toBe('Clima - Weather for any city')
   })
 
   it('leaves out details the API did not provide', async () => {

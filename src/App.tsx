@@ -105,10 +105,10 @@ function App() {
 
   const isLocating = state.status === 'loading' && state.request.kind === 'location'
 
-  // Name the browser tab after the city being shown.
+  // Name the browser tab after the city being shown. The default matches index.html.
   const cityName = state.status === 'success' ? state.location.name : null
   useEffect(() => {
-    document.title = cityName ? `${cityName} weather - Clima` : 'Clima'
+    document.title = cityName ? `${cityName} weather - Clima` : 'Clima - Weather for any city'
   }, [cityName])
 
   /** Searches from outside the form (example cities, retry) and keeps focus in the search box. */
