@@ -1,4 +1,9 @@
-import type { Location, WeatherCondition, WeatherIconName } from '../types/weather.ts'
+import type {
+  Location,
+  TemperatureUnit,
+  WeatherCondition,
+  WeatherIconName,
+} from '../types/weather.ts'
 
 /** Trims a search query and collapses runs of whitespace into single spaces. */
 export function normalizeQuery(input: string): string {
@@ -57,14 +62,27 @@ export function getWeatherCondition(code: number, isDay: boolean): WeatherCondit
   return { label, icon }
 }
 
-/** Rounds to a whole degree. `|| 0` turns -0 (from rounding -0.4) into 0. */
-export function roundTemperature(celsius: number): number {
-  return Math.round(celsius) || 0
+/*
+  Weather data is always stored in Celsius. These helpers are the only place
+  that converts it, so every temperature on screen follows the chosen unit.
+*/
+
+export function convertTemperature(celsius: number, unit: TemperatureUnit): number {
+  return unit === 'fahrenheit' ? (celsius * 9) / 5 + 32 : celsius
+}
+
+/** Whole degrees in the chosen unit. `|| 0` turns -0 (from rounding -0.4) into 0. */
+export function roundTemperature(celsius: number, unit: TemperatureUnit): number {
+  return Math.round(convertTemperature(celsius, unit)) || 0
 }
 
 /** Whole degrees with a degree sign, e.g. "34°". */
-export function formatTemperature(celsius: number): string {
-  return `${roundTemperature(celsius)}°`
+export function formatTemperature(celsius: number, unit: TemperatureUnit): string {
+  return `${roundTemperature(celsius, unit)}°`
+}
+
+export function formatUnitSymbol(unit: TemperatureUnit): string {
+  return unit === 'fahrenheit' ? '°F' : '°C'
 }
 
 // Forecast dates are calendar days at the location ("2026-10-21"). Reading them

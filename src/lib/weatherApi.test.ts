@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ApiError, fetchJson, getWeather, searchLocation } from './weatherApi.ts'
+import { ApiError, fetchJson, getWeather, reverseGeocode, searchLocation } from './weatherApi.ts'
 
 function jsonResponse(body: unknown, status = 200) {
   return {
@@ -32,7 +32,6 @@ describe('searchLocation', () => {
     const location = await searchLocation('Manila')
 
     expect(location).toEqual({
-      id: 1701668,
       name: 'Manila',
       region: 'National Capital Region',
       country: 'Philippines',
@@ -61,7 +60,6 @@ describe('searchLocation', () => {
     const location = await searchLocation('Manila')
 
     expect(location).toEqual({
-      id: 1701668,
       name: 'Manila',
       latitude: 14.6042,
       longitude: 120.9822,
@@ -311,6 +309,86 @@ describe('getWeather: current conditions', () => {
     )
 
     await expect(getWeather(manila)).rejects.toMatchObject({ kind: 'server' })
+  })
+})
+
+describe('reverseGeocode', () => {
+  const coordinates = { latitude: 14.55, longitude: 121.02 }
+  const makati = {
+    latitude: 14.55,
+    longitude: 121.02,
+    city: 'Manila',
+    locality: 'Makati City',
+    principalSubdivision: 'National Capital Region',
+    countryName: 'Philippines',
+  }
+
+  it('names the coordinates after the city, region and country', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(makati)))
+
+    const location = await reverseGeocode(coordinates)
+
+    expect(location).toEqual({
+      name: 'Manila',
+      region: 'National Capital Region',
+      country: 'Philippines',
+      latitude: 14.55,
+      longitude: 121.02,
+    })
+  })
+
+  it('asks BigDataCloud for an English place name at those coordinates', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(makati))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await reverseGeocode(coordinates)
+
+    const url = new URL(fetchMock.mock.calls[0][0])
+    expect(url.origin + url.pathname).toBe(
+      'https://api.bigdatacloud.net/data/reverse-geocode-client',
+    )
+    expect(url.searchParams.get('latitude')).toBe('14.55')
+    expect(url.searchParams.get('longitude')).toBe('121.02')
+    expect(url.searchParams.get('localityLanguage')).toBe('en')
+  })
+
+  it('uses the locality when there is no city', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse({ ...makati, city: '', locality: 'Makati City' })),
+    )
+
+    const location = await reverseGeocode(coordinates)
+
+    expect(location?.name).toBe('Makati City')
+  })
+
+  it('leaves out an empty region and country', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(jsonResponse({ ...makati, principalSubdivision: '', countryName: '' })),
+    )
+
+    const location = await reverseGeocode(coordinates)
+
+    expect(location).toEqual({ name: 'Manila', latitude: 14.55, longitude: 121.02 })
+  })
+
+  it('returns null when the place has no name, such as open ocean', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse({ ...makati, city: '', locality: '' })),
+    )
+
+    expect(await reverseGeocode(coordinates)).toBeNull()
+  })
+
+  it('throws a server error when the service fails', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({}, 500)))
+
+    await expect(reverseGeocode(coordinates)).rejects.toMatchObject({ kind: 'server' })
   })
 })
 

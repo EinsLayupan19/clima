@@ -4,18 +4,19 @@ import {
   formatTemperature,
   getWeatherCondition,
 } from '../lib/weatherUtils.ts'
-import type { DailyForecast } from '../types/weather.ts'
+import type { DailyForecast, TemperatureUnit } from '../types/weather.ts'
 import WeatherIcon from './WeatherIcon.tsx'
 
 interface ForecastCardProps {
   day: DailyForecast
+  unit: TemperatureUnit
 }
 
 /**
  * One forecast day. A compact row on phones; a centered column from md up,
  * where the forecast is laid out horizontally.
  */
-function ForecastCard({ day }: ForecastCardProps) {
+function ForecastCard({ day, unit }: ForecastCardProps) {
   const condition = getWeatherCondition(day.weatherCode, true)
 
   return (
@@ -35,11 +36,11 @@ function ForecastCard({ day }: ForecastCardProps) {
       <p className="flex justify-end gap-3 tabular-nums md:mt-auto md:justify-center md:gap-2">
         <span className="font-medium">
           <span className="sr-only">High </span>
-          {formatTemperature(day.high)}
+          {formatTemperature(day.high, unit)}
         </span>
         <span className="text-ink-muted">
           <span className="sr-only">Low </span>
-          {formatTemperature(day.low)}
+          {formatTemperature(day.low, unit)}
         </span>
       </p>
     </div>

@@ -7,8 +7,9 @@
   use semantic names (bg-canvas, text-ink, text-ink-muted, border-line, ...).
 
   Corner radius rule: everything rounded uses rounded-xl (12px), from buttons
-  and inputs to loading placeholders. The only exception is the small focus
-  outline on inline links (rounded-sm).
+  and inputs to loading placeholders. Two exceptions: the small focus outline
+  on inline links (rounded-sm), and the unit toggle's inner segments (10px,
+  so they sit concentric inside the 12px frame with its 2px padding).
 
   --line is for decorative dividers. --line-strong is for borders that mark
   where a control is (WCAG 1.4.11 asks for 3:1 against the page).

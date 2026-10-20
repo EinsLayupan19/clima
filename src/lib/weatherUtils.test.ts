@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import {
+  convertTemperature,
   formatDayLabel,
   formatLocationSubtitle,
   formatShortDate,
   formatPercent,
   formatTemperature,
+  formatUnitSymbol,
   formatWindSpeed,
   getWeatherCondition,
   normalizeQuery,
+  roundTemperature,
 } from './weatherUtils.ts'
 
 describe('normalizeQuery', () => {
@@ -89,15 +92,52 @@ describe('getWeatherCondition', () => {
 
 describe('formatTemperature', () => {
   it('rounds to a whole degree', () => {
-    expect(formatTemperature(34.4)).toBe('34°')
+    expect(formatTemperature(34.4, 'celsius')).toBe('34°')
   })
 
   it('rounds negative temperatures', () => {
-    expect(formatTemperature(-7.6)).toBe('-8°')
+    expect(formatTemperature(-7.6, 'celsius')).toBe('-8°')
   })
 
   it('never shows a negative zero', () => {
-    expect(formatTemperature(-0.4)).toBe('0°')
+    expect(formatTemperature(-0.4, 'celsius')).toBe('0°')
+  })
+
+  it('converts to Fahrenheit before rounding', () => {
+    expect(formatTemperature(34.4, 'fahrenheit')).toBe('94°')
+  })
+
+  it('never shows a negative zero in Fahrenheit either', () => {
+    // -17.9°C is -0.22°F, which rounds to -0.
+    expect(formatTemperature(-17.9, 'fahrenheit')).toBe('0°')
+  })
+})
+
+describe('convertTemperature', () => {
+  it('leaves Celsius values unchanged', () => {
+    expect(convertTemperature(21.5, 'celsius')).toBe(21.5)
+  })
+
+  it('converts the boiling point to 212°F', () => {
+    expect(convertTemperature(100, 'fahrenheit')).toBe(212)
+  })
+
+  it('converts -40°C to -40°F', () => {
+    expect(convertTemperature(-40, 'fahrenheit')).toBe(-40)
+  })
+})
+
+describe('roundTemperature', () => {
+  it('rounds in the requested unit', () => {
+    expect(roundTemperature(34.4, 'celsius')).toBe(34)
+    expect(roundTemperature(34.4, 'fahrenheit')).toBe(94)
+  })
+})
+
+describe('formatUnitSymbol', () => {
+  it('names the unit with a degree sign', () => {
+    expect(formatUnitSymbol('celsius')).toBe('°C')
+    expect(formatUnitSymbol('fahrenheit')).toBe('°F')
   })
 })
 

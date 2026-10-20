@@ -1,5 +1,6 @@
 import type {
   ApiErrorKind,
+  Coordinates,
   CurrentWeather,
   DailyForecast,
   Location,
@@ -8,6 +9,9 @@ import type {
 
 const GEOCODING_URL = 'https://geocoding-api.open-meteo.com/v1/search'
 const FORECAST_URL = 'https://api.open-meteo.com/v1/forecast'
+// Open-Meteo has no reverse geocoding. BigDataCloud's client-side endpoint is
+// free, needs no key, and is meant for looking up the device's own position.
+const REVERSE_GEOCODING_URL = 'https://api.bigdatacloud.net/data/reverse-geocode-client'
 const REQUEST_TIMEOUT_MS = 10_000
 const FORECAST_DAYS = 7
 
@@ -96,7 +100,6 @@ function parseGeocodingResponse(data: unknown): Location | null {
   const result: unknown = data.results[0]
   if (
     !isRecord(result) ||
-    typeof result.id !== 'number' ||
     typeof result.name !== 'string' ||
     !isFiniteNumber(result.latitude) ||
     !isFiniteNumber(result.longitude)
@@ -105,7 +108,6 @@ function parseGeocodingResponse(data: unknown): Location | null {
   }
 
   const location: Location = {
-    id: result.id,
     name: result.name,
     latitude: result.latitude,
     longitude: result.longitude,
@@ -115,9 +117,33 @@ function parseGeocodingResponse(data: unknown): Location | null {
   return location
 }
 
+/** Names the place at some coordinates, or returns null if it has no name (open sea). */
+export async function reverseGeocode(
+  coordinates: Coordinates,
+  signal?: AbortSignal,
+): Promise<Location | null> {
+  const params = new URLSearchParams({
+    latitude: String(coordinates.latitude),
+    longitude: String(coordinates.longitude),
+    localityLanguage: 'en',
+  })
+  const data = await fetchJson(`${REVERSE_GEOCODING_URL}?${params}`, { signal })
+  if (!isRecord(data)) throw invalidResponse()
+
+  const name = nonEmptyString(data.city) ?? nonEmptyString(data.locality)
+  if (!name) return null
+
+  const location: Location = { name, ...coordinates }
+  const region = nonEmptyString(data.principalSubdivision)
+  const country = nonEmptyString(data.countryName)
+  if (region) location.region = region
+  if (country) location.country = country
+  return location
+}
+
 /** Fetches current conditions and the 7-day forecast for a location in one request. */
 export async function getWeather(
-  location: Pick<Location, 'latitude' | 'longitude'>,
+  location: Coordinates,
   signal?: AbortSignal,
 ): Promise<WeatherReport> {
   const params = new URLSearchParams({
@@ -206,6 +232,10 @@ function isIsoDate(value: unknown): value is string {
 
 function optionalNumber(value: unknown): number | null {
   return isFiniteNumber(value) ? value : null
+}
+
+function nonEmptyString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() !== '' ? value.trim() : undefined
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

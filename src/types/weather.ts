@@ -1,6 +1,5 @@
-/** A place the user searched for, normalized from the geocoding API. */
+/** A place to show weather for, from a city search or the user's position. */
 export interface Location {
-  id: number
   name: string
   /** State, province or region, when the API knows it. */
   region?: string
@@ -8,6 +7,10 @@ export interface Location {
   latitude: number
   longitude: number
 }
+
+export type Coordinates = Pick<Location, 'latitude' | 'longitude'>
+
+export type TemperatureUnit = 'celsius' | 'fahrenheit'
 
 /**
  * Current conditions at a location, in metric units (°C, km/h, %).
@@ -62,9 +65,18 @@ export interface WeatherCondition {
 
 export type ApiErrorKind = 'network' | 'timeout' | 'server' | 'invalid-response'
 
+export type LocationErrorKind =
+  | 'location-denied'
+  | 'location-unavailable'
+  | 'location-timeout'
+  | 'location-unsupported'
+
+/** What the user asked for: weather for a typed city, or for where they are. */
+export type WeatherRequest = { kind: 'search'; query: string } | { kind: 'location' }
+
 export type WeatherState =
   | { status: 'idle' }
-  | { status: 'loading'; query: string }
+  | { status: 'loading'; request: WeatherRequest }
   | { status: 'not-found'; query: string }
-  | { status: 'error'; query: string; kind: ApiErrorKind }
+  | { status: 'error'; request: WeatherRequest; kind: ApiErrorKind | LocationErrorKind }
   | { status: 'success'; location: Location; weather: WeatherReport }

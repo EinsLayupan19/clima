@@ -52,26 +52,47 @@ function forecastResult(
 }
 
 /**
- * Stubs fetch with one handler per Open-Meteo endpoint.
- * Each handler receives the request URL and returns the response.
+ * Stubs fetch with one handler per API endpoint (Open-Meteo city search and
+ * forecast, BigDataCloud reverse geocoding). Each handler receives the request
+ * URL and returns the response; a request with no handler fails the test.
  */
 function stubOpenMeteo(handlers: {
-  geocoding: (url: URL) => Promise<Response>
+  geocoding?: (url: URL) => Promise<Response>
   forecast?: (url: URL) => Promise<Response>
+  reverseGeocoding?: (url: URL) => Promise<Response>
 }) {
   const fetchMock = vi.fn((input: string) => {
     const url = new URL(input)
-    if (url.hostname === 'geocoding-api.open-meteo.com') return handlers.geocoding(url)
-    if (handlers.forecast) return handlers.forecast(url)
+    const handler = {
+      'geocoding-api.open-meteo.com': handlers.geocoding,
+      'api.open-meteo.com': handlers.forecast,
+      'api.bigdatacloud.net': handlers.reverseGeocoding,
+    }[url.hostname]
+    if (handler) return handler(url)
     throw new Error(`Unexpected request: ${input}`)
   })
   vi.stubGlobal('fetch', fetchMock)
   return fetchMock
 }
 
+type PositionSuccess = (position: { coords: { latitude: number; longitude: number } }) => void
+type PositionFailure = (error: { code: number; message: string }) => void
+
+/** Gives jsdom a navigator.geolocation that answers the way `respond` says. */
+function stubGeolocation(respond: (success: PositionSuccess, failure: PositionFailure) => void) {
+  const getCurrentPosition = vi.fn(respond)
+  Object.defineProperty(navigator, 'geolocation', {
+    configurable: true,
+    value: { getCurrentPosition },
+  })
+  return getCurrentPosition
+}
+
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
+  Reflect.deleteProperty(navigator, 'geolocation')
+  localStorage.clear()
 })
 
 describe('App layout', () => {
@@ -470,3 +491,275 @@ function detailValue(label: string): string | null | undefined {
   const term = screen.getByText(label).closest('dt')
   return term?.nextElementSibling?.textContent
 }
+
+describe('Use my location', () => {
+  const makati = {
+    city: 'Manila',
+    locality: 'Makati City',
+    principalSubdivision: 'National Capital Region',
+    countryName: 'Philippines',
+  }
+
+  it('shows the weather where the user is, named by reverse geocoding', async () => {
+    stubGeolocation((success) => success({ coords: { latitude: 14.554729, longitude: 121.024445 } }))
+    const fetchMock = stubOpenMeteo({
+      reverseGeocoding: async () => jsonResponse(makati),
+      forecast: async () => jsonResponse(forecastResult()),
+    })
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(screen.getByRole('button', { name: 'Use my location' }))
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Manila' })).toBeTruthy()
+    expect(screen.getByText('National Capital Region, Philippines')).toBeTruthy()
+    expect(screen.getByTestId('current-temperature').textContent).toBe('34°C')
+    const forecastCall = fetchMock.mock.calls.find(([url]) => url.includes('api.open-meteo.com'))
+    const forecastUrl = new URL(forecastCall![0])
+    expect(forecastUrl.searchParams.get('latitude')).toBe('14.55')
+    expect(forecastUrl.searchParams.get('longitude')).toBe('121.02')
+  })
+
+  it('clears the search box so it does not show a different city', async () => {
+    stubGeolocation((success) => success({ coords: { latitude: 14.55, longitude: 121.02 } }))
+    stubOpenMeteo({
+      reverseGeocoding: async () => jsonResponse(makati),
+      forecast: async () => jsonResponse(forecastResult()),
+    })
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.type(screen.getByLabelText('City'), 'Tokyo')
+    await user.click(screen.getByRole('button', { name: 'Use my location' }))
+    await screen.findByRole('heading', { level: 1, name: 'Manila' })
+
+    expect((screen.getByLabelText('City') as HTMLInputElement).value).toBe('')
+  })
+
+  it('announces that it is finding the location while waiting', async () => {
+    stubGeolocation(() => {})
+    stubOpenMeteo({})
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(screen.getByRole('button', { name: 'Use my location' }))
+
+    expect(screen.getByRole('status').textContent).toBe('Finding your location…')
+  })
+
+  it('asks the browser only once while a location request is already running', async () => {
+    const getCurrentPosition = stubGeolocation(() => {})
+    stubOpenMeteo({})
+    const user = userEvent.setup()
+    render(<App />)
+    const button = screen.getByRole('button', { name: 'Use my location' })
+
+    await user.click(button)
+    await user.click(button)
+
+    expect(getCurrentPosition).toHaveBeenCalledTimes(1)
+    expect(button.getAttribute('aria-disabled')).toBe('true')
+  })
+
+  it('explains a denied permission without offering a retry or calling any API', async () => {
+    stubGeolocation((_success, failure) => failure({ code: 1, message: 'User denied Geolocation' }))
+    const fetchMock = stubOpenMeteo({})
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(screen.getByRole('button', { name: 'Use my location' }))
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Location access is off' }),
+    ).toBeTruthy()
+    expect(screen.getByText(/search for a city instead/)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
+    expect(screen.getByRole('status').textContent).toBe('Location access is off')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('explains an unavailable position', async () => {
+    stubGeolocation((_success, failure) => failure({ code: 2, message: 'Position unavailable' }))
+    stubOpenMeteo({})
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(screen.getByRole('button', { name: 'Use my location' }))
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Couldn’t find your location' }),
+    ).toBeTruthy()
+  })
+
+  it('explains a timeout and recovers when Try again is pressed', async () => {
+    let attempts = 0
+    stubGeolocation((success, failure) => {
+      attempts += 1
+      if (attempts === 1) failure({ code: 3, message: 'Timeout expired' })
+      else success({ coords: { latitude: 14.55, longitude: 121.02 } })
+    })
+    stubOpenMeteo({
+      reverseGeocoding: async () => jsonResponse(makati),
+      forecast: async () => jsonResponse(forecastResult()),
+    })
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(screen.getByRole('button', { name: 'Use my location' }))
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Finding your location took too long' }),
+    ).toBeTruthy()
+
+    await user.click(screen.getByRole('button', { name: 'Try again' }))
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Manila' })).toBeTruthy()
+  })
+
+  it('explains when the browser cannot share a location at all', async () => {
+    stubOpenMeteo({})
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(screen.getByRole('button', { name: 'Use my location' }))
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Location isn’t available' }),
+    ).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
+  })
+
+  it('still shows the weather when the place name cannot be looked up', async () => {
+    stubGeolocation((success) => success({ coords: { latitude: 14.55, longitude: 121.02 } }))
+    stubOpenMeteo({
+      reverseGeocoding: async () => jsonResponse({}, 503),
+      forecast: async () => jsonResponse(forecastResult()),
+    })
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(screen.getByRole('button', { name: 'Use my location' }))
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Current location' })).toBeTruthy()
+    expect(screen.getByTestId('current-temperature').textContent).toBe('34°C')
+  })
+
+  it('shows a connection error when the weather request fails, and Try again recovers', async () => {
+    stubGeolocation((success) => success({ coords: { latitude: 14.55, longitude: 121.02 } }))
+    const forecast = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValueOnce(jsonResponse(forecastResult()))
+    stubOpenMeteo({ reverseGeocoding: async () => jsonResponse(makati), forecast })
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(screen.getByRole('button', { name: 'Use my location' }))
+    expect(await screen.findByRole('heading', { level: 1, name: 'Couldn’t connect' })).toBeTruthy()
+
+    await user.click(screen.getByRole('button', { name: 'Try again' }))
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Manila' })).toBeTruthy()
+  })
+})
+
+describe('Temperature unit', () => {
+  function stubManila() {
+    return stubOpenMeteo({
+      geocoding: async () =>
+        jsonResponse({
+          results: [geocodingResult('Manila', 'National Capital Region', 'Philippines')],
+        }),
+      forecast: async () => jsonResponse(forecastResult()),
+    })
+  }
+
+  function radio(name: string) {
+    return screen.getByRole('radio', { name }) as HTMLInputElement
+  }
+
+  it('starts in Celsius', () => {
+    render(<App />)
+
+    expect(radio('Celsius').checked).toBe(true)
+    expect(radio('Fahrenheit').checked).toBe(false)
+  })
+
+  it('switches the current temperature and feels-like to Fahrenheit without a new request', async () => {
+    const fetchMock = stubManila()
+    const user = userEvent.setup()
+    render(<App />)
+    await user.type(screen.getByLabelText('City'), 'Manila{Enter}')
+    await screen.findByRole('heading', { level: 1, name: 'Manila' })
+    const requestsBefore = fetchMock.mock.calls.length
+
+    await user.click(radio('Fahrenheit'))
+
+    expect(screen.getByTestId('current-temperature').textContent).toBe('94°F')
+    expect(detailValue('Feels like')).toBe('105°')
+    expect(detailValue('Wind')).toBe('3 km/h')
+    expect(fetchMock.mock.calls.length).toBe(requestsBefore)
+  })
+
+  it('switches the forecast highs and lows to Fahrenheit', async () => {
+    stubManila()
+    const user = userEvent.setup()
+    render(<App />)
+    await user.type(screen.getByLabelText('City'), 'Manila{Enter}')
+    await screen.findByRole('heading', { level: 1, name: 'Manila' })
+
+    await user.click(radio('Fahrenheit'))
+
+    const days = within(screen.getByRole('region', { name: '7-day forecast' })).getAllByRole(
+      'listitem',
+    )
+    // The fixture's second day is 32.9°C / 27.2°C.
+    expect(days[1].textContent).toContain('High 91°')
+    expect(days[1].textContent).toContain('Low 81°')
+  })
+
+  it('announces temperatures in the selected unit', async () => {
+    stubManila()
+    localStorage.setItem('clima.temperatureUnit', 'fahrenheit')
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.type(screen.getByLabelText('City'), 'Manila{Enter}')
+    await screen.findByRole('heading', { level: 1, name: 'Manila' })
+
+    expect(screen.getByRole('status').textContent).toBe(
+      'Showing weather for Manila, National Capital Region, Philippines: 94°F, mainly clear.',
+    )
+  })
+
+  it('remembers the choice for the next visit', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(radio('Fahrenheit'))
+    cleanup()
+    render(<App />)
+
+    expect(localStorage.getItem('clima.temperatureUnit')).toBe('fahrenheit')
+    expect(radio('Fahrenheit').checked).toBe(true)
+  })
+
+  it('starts in a saved Fahrenheit preference', async () => {
+    stubManila()
+    localStorage.setItem('clima.temperatureUnit', 'fahrenheit')
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.type(screen.getByLabelText('City'), 'Manila{Enter}')
+    await screen.findByRole('heading', { level: 1, name: 'Manila' })
+
+    expect(screen.getByTestId('current-temperature').textContent).toBe('94°F')
+  })
+
+  it('falls back to Celsius when the saved value is not a unit', () => {
+    localStorage.setItem('clima.temperatureUnit', 'kelvin')
+
+    render(<App />)
+
+    expect(radio('Celsius').checked).toBe(true)
+  })
+})

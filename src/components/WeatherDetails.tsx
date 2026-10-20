@@ -1,6 +1,6 @@
 import { DropIcon, ThermometerIcon, UmbrellaIcon, WindIcon, type Icon } from '@phosphor-icons/react'
 import { formatPercent, formatTemperature, formatWindSpeed } from '../lib/weatherUtils.ts'
-import type { CurrentWeather } from '../types/weather.ts'
+import type { CurrentWeather, TemperatureUnit } from '../types/weather.ts'
 
 interface Detail {
   label: string
@@ -10,12 +10,17 @@ interface Detail {
 
 interface WeatherDetailsProps {
   weather: CurrentWeather
+  unit: TemperatureUnit
 }
 
-function WeatherDetails({ weather }: WeatherDetailsProps) {
+function WeatherDetails({ weather, unit }: WeatherDetailsProps) {
   const details: Detail[] = []
   if (weather.feelsLike !== null) {
-    details.push({ label: 'Feels like', value: formatTemperature(weather.feelsLike), icon: ThermometerIcon })
+    details.push({
+      label: 'Feels like',
+      value: formatTemperature(weather.feelsLike, unit),
+      icon: ThermometerIcon,
+    })
   }
   if (weather.humidity !== null) {
     details.push({ label: 'Humidity', value: formatPercent(weather.humidity), icon: DropIcon })
